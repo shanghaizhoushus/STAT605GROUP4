@@ -1,0 +1,52 @@
+---
+title: "Group 11"
+author: "Xiao Li"
+date: "2022-11-18"
+output: html_document
+---
+**Project of group 11**
+
+$Data\ Reading$
+
+```{r}
+eq2001 <- read.csv("events_2000-2001.csv")
+head(eq2001)
+```
+
+$Variables$
+
+Time: The time when earthquake happened
+
+Latitude: The latitude of the place where the earthquake occurred
+
+Longitude: The longitude of the place where the earthquake occurred
+
+Depth: Epicenter depth
+
+DepthUnits: Units of epicenter depth
+
+Magnitude: Richter magnitude scale
+
+$Research\ Goal$
+We are going to research the relationship between Magnitude and Frequency, then taking time into account, in order to predict the frequency and magnitude of earthquakes in a specific area in the coming year.
+  
+```{r}
+N <- function(n){
+   length(eq2001$magnitude[which(eq2001$magnitude>n)])
+ }
+ M<- seq(5,8,.1)
+ b<-1:30
+ for (i in 1:31) {
+   b[i]<-N(M[i])
+ }
+ plot(M,b)
+```
+  
+  
+$Computational\ Steps$
+
+Use GLM to research the relationship between Magnitude and Frequency and compute the parameters, compare the parameters of different years to see if there exists trend over time. Finally predict the frequency and magnitude of earthquakes in a specific area in the coming year with the model.
+
+$Gituhub\ Link$
+
+https://github.com/zhoushudarkages/STAT605GROUP4.git
