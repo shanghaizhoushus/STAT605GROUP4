@@ -1,0 +1,536 @@
+---
+title: "Research on the relationship between the magnitude and frequency of earthquake around the world"
+author: Xiao Li; Xingze Wang; Mingyu Wang; Yulong Zhao; Qizhou Huang
+date: "2022-12-05"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    # toc_depth: 2
+    toc_float:
+      true
+    number_sections: true
+  # word_document
+---
+
+Introduction
+========
+Research purpose
+---------
+Earthquakes are a major hidden danger that threatens human survival and safety, therefore, finding the pattern of earthquake occurrence and even predicting earthquakes that may occur in the future have become important topics. Experience shows that severe earthquakes generally occur less frequently than weak ones, and island nations like Indonesia experience earthquakes more often than land. The research purpose of this article is to find out the relationship between earthquake frequency and magnitude, and to study the regional and time differences of this relationship.
+
+Data
+----------
+The data comes from Kaggle project *Earthquakes Time-Series Analysis* https://www.kaggle.com/datasets/elemento/earthquakes-timeseries-analysis-nsfe-part-2, it contains detailed information on every earthquake of the 21st century After data cleaning, we only keep the time, latitude, longitude depth and magnitude of the earthquakes.  
+
+```{r echo=FALSE}
+eq_all <- read.csv("eq_all.csv")
+head(eq_all[,c(1:7)])
+```
+
+Computation
+---------
+We fit linear models of logged frequency and magnitude of different years and areas, to explore the time and regional differences in frequency and magnitude through studying the changing trend of the coefficient
+
+Conclusion
+---------
+In general, the magnitude of an earthquake is linearly related to the frequency after taking the logarithm( where the frequency represents the total number of all earthquakes greater than this magnitude over a period of time), this relationship is valid for all regions and time periods, but the specific coefficients are different. The frequency of earthquakes does not show a regular pattern over time, therefore, it is difficult to accurately predict the number of earthquakes in the future, but a rough possible interval can be given.
+
+Research Steps
+========
+Basic Model
+---------
+Firstly we can draw a plot of the frequency and magnitude of all the earthquake around the world of 21st century.
+
+```{r echo = FALSE}
+N <- function(n){
+   length(eq_all$magnitude[which(eq_all$magnitude>n)])
+ }
+ M<- seq(5,8,.1)
+ b<-1:30
+ for (i in 1:31) {
+   b[i]<-N(M[i])
+ }
+ plot(M,b,xlab="Magnitude",ylab="Frequency",col="blue",pch=16)
+```
+
+We can find that the curve in the figure is very similar to the curve of the logarithmic function, so we take the logarithm of the frequency and then fit a linear model with the magnitude, the plot and summary of model is shown below.
+
+```{r echo=FALSE}
+logmod <- lm(log(b)~M)
+plot(M,log(b),xlab="Magnitude",ylab="log(Frequency)",col="blue",pch=16)
+lines(M,predict(logmod,data.frame(M)),col="red")
+```
+```{r echo=FALSE}
+summary(logmod)
+```
+
+The R-square of the model is .9987, which means the model fits well. There exists strong linear relationship between the magnitude and logged frequency, it can be expressed as
+$$F=\alpha log(M)+\beta$$
+where F refers to frequency, M refers to magnitude, $\alpha$ and $\beta$ are coefficients.
+Time Trend
+---------
+After that, we tried to study the time trend of earthquake frequency around the world. We fit models of different years and draw the plot of $\alpha$s and $\beta$s to see if there exists pattern.
+
+```{r include=FALSE}
+library("ggpubr")
+library("ggplot2")
+library("rnaturalearth")
+library(ggmap)
+library(sp)
+library(maptools)
+library(maps) 
+#read files
+nameList = list.files("earthquake")
+dataList = list()
+len = length(nameList)
+setwd("earthquake")
+for (i in 1:len){
+  dataList[[i]] = read.csv(nameList[i])
+}
+#calculate numbers
+relation1 = data.frame(magn = numeric(1100), bigger = numeric(1100), year = numeric(1100))
+
+for (j in 1:22){
+  for (i in 1:50){
+    relation1$magn[50 * (j - 1) + i] = 4.8 + 0.1 * i
+    relation1$bigger[50 * (j - 1) + i] = sum(as.numeric(dataList[[j]]$magnitude > relation1$magn[50 * (j - 1) + i]))
+    relation1$year[50 * (j - 1) + i] = j
+  }
+}
+relation1$logbigger = log(relation1$bigger + 1)
+relation1 = relation1[relation1$logbigger > 0, ]
+plot(relation1$magn, relation1$logbigger, pch = 16)
+model = lm(logbigger ~ magn, data = relation1)
+abline(model, col = "red",lwd = 2)
+
+#all data
+totalData = dataList[[1]]
+for (i in 2:len){
+  totalData = rbind(totalData, dataList[[i]])
+}
+
+
+totalData$year = substr(totalData$time,1,4)
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(totalData,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-90,90) 
+mp2<-mp+geom_point(alpha = 0.3,size=totalData$magnitude-4)+ggtitle("global eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+alpha = numeric(22)
+beta = numeric(22)
+
+for (i in 1:22){
+  data = relation1[relation1$year == i,]
+  model = lm(logbigger ~ magn, data = data)
+  alpha[i] = model$coefficients[1]
+  beta[i] = model$coefficients[2]
+}
+
+x = 2000:2021
+
+
+
+dfa = data.frame(x=x, alpha = alpha)
+a = ggplot(data = dfa, mapping = aes(x = x, y = alpha)) + geom_line(colour = "red") + ggtitle("Alpha")+labs(x="year")
+dfb = data.frame(x=x, beta = beta)
+b = ggplot(data = dfb, mapping = aes(x = x, y = beta)) + geom_line(colour = "blue") + ggtitle("Beta")+labs(x="year")
+
+
+```
+
+
+```{r echo=FALSE}
+ggarrange(a, b, 
+          ncol = 1, nrow = 2)
+```
+
+We could see that the coefficients keep changing with time. The range of $\alpha$ is $[14.40899, 18.52192]$. The range of $\beta$ is $[-2.442888, -1.781619]$.
+
+We can also draw a QQ Plot to examine the normality of the coefficients. It shows that basically the coefficients are normally distributed.
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(alpha,col="blue",pch=16,main = "Alpha Q-Q Plot")
+qqline(alpha,col="red")
+qqnorm(beta,col="blue",pch=16,main = "Beta Q-Q Plot")
+qqline(beta,col="red")
+```
+
+We can also draw a plot a global earthquake map. Different colored dots represent different years of earthquake.
+
+
+```{r echo=FALSE }
+mp2
+```
+
+From the image we could find that the number of earthquakes is not evenly distributed across regions. So we choose four representative regions (Indonesia, Japan, Mediterranean and 35 degrees latitude) to explore to see if there coefficients differ from the overall.
+
+Indonesia
+-------
+```{r,echo=FALSE}
+library("ggpubr")
+library("ggplot2")
+library("rnaturalearth")
+library(ggmap)
+library(sp)
+library(maptools)
+library(maps) 
+
+nameList = list.files("Indonesia")
+dataList = list()
+len = length(nameList)
+setwd("Indonesia")
+for (i in 1:len){
+  dataList[[i]] = read.csv(nameList[i])
+}
+
+relation1 = data.frame(magn = numeric(1100), bigger = numeric(1100), year = numeric(1100))
+
+for (j in 1:22){
+  for (i in 1:50){
+    relation1$magn[50 * (j - 1) + i] = 4.8 + 0.1 * i
+    relation1$bigger[50 * (j - 1) + i] = sum(as.numeric(dataList[[j]]$magnitude > relation1$magn[50 * (j - 1) + i]))
+    relation1$year[50 * (j - 1) + i] = j
+  }
+}
+relation1$logbigger = log(relation1$bigger + 1)
+relation1 = relation1[relation1$logbigger > 0, ]
+#plot(relation1$magn, relation1$logbigger, pch = 16)
+model = lm(logbigger ~ magn, data = relation1)
+#abline(model, col = "red",lwd = 2)
+
+```
+
+```{r,echo=FALSE}
+totalData = dataList[[1]]
+for (i in 2:len){
+  totalData = rbind(totalData, dataList[[i]])
+}
+
+
+totalData$year = substr(totalData$time,1,4)
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(totalData,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-90,90) 
+mp2<-mp+geom_point(alpha = 0.3,size=totalData$magnitude-4)+ggtitle("global eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+alpha = numeric(22)
+beta = numeric(22)
+
+
+y=levels(factor(relation1$year))
+y=as.numeric(y)
+for (i in y){
+  data = relation1[relation1$year == i,]
+  model = lm(logbigger ~ magn, data = data)
+  alpha[i] = model$coefficients[1]
+  beta[i] = model$coefficients[2]
+}
+alpha=alpha[-5]
+beta=beta[-5]
+x = c(2000:2003,2005:2021)
+
+
+
+dfa = data.frame(x=x, alpha = alpha)
+a = ggplot(data = dfa, mapping = aes(x = x, y = alpha)) + geom_line(colour = "red") + ggtitle("Alpha")+labs(x="year")
+dfb = data.frame(x=x, beta = beta)
+b = ggplot(data = dfb, mapping = aes(x = x, y = beta)) + geom_line(colour = "blue") + ggtitle("Beta")+labs(x="year")
+
+
+```
+```{r,echo=FALSE}
+
+YDNXY = totalData[totalData$latitude>-11 & totalData$latitude<6 & totalData$longitude>95 & totalData$longitude<141,]
+DZH = totalData[totalData$latitude>32 & totalData$latitude<44 & totalData$longitude>-5 & totalData$longitude<35,]
+RB = totalData[totalData$latitude>20 & totalData$latitude<45 & totalData$longitude>120 & totalData$longitude<155,]
+
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(YDNXY,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-11,6)+xlim(95,141)
+mp2<-mp+geom_point(alpha = 0.3,size=YDNXY$magnitude-4)+ggtitle("Indonesia region eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+mp2
+```
+We could draw a plot of Alpha and Beta in Indonesia. The range of $\alpha$ is $[5.431321, 19.214987]$. The range of $\beta$ is $[-3.199148, -0.813654]$
+
+```{r echo=FALSE}
+ggarrange(a, b, 
+          ncol = 1, nrow = 2)
+```
+
+We can also draw a QQ Plot to examine the normality of the coefficients. It shows that basically the coefficients are normally distributed.
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(alpha,col="blue",pch=16,main = "Alpha Q-Q Plot")
+qqline(alpha,col="red")
+qqnorm(beta,col="blue",pch=16,main = "Beta Q-Q Plot")
+qqline(beta,col="red")
+```
+
+
+
+
+
+Japan
+------
+```{r,echo=FALSE}
+nameList = list.files("Japan")
+dataList = list()
+len = length(nameList)
+setwd("Japan")
+for (i in 1:len){
+  dataList[[i]] = read.csv(nameList[i])
+}
+
+relation1 = data.frame(magn = numeric(1100), bigger = numeric(1100), year = numeric(1100))
+
+for (j in 1:22){
+  for (i in 1:50){
+    relation1$magn[50 * (j - 1) + i] = 4.8 + 0.1 * i
+    relation1$bigger[50 * (j - 1) + i] = sum(as.numeric(dataList[[j]]$magnitude > relation1$magn[50 * (j - 1) + i]))
+    relation1$year[50 * (j - 1) + i] = j
+  }
+}
+relation1$logbigger = log(relation1$bigger + 1)
+relation1 = relation1[relation1$logbigger > 0, ]
+totalData = dataList[[1]]
+for (i in 2:len){
+  totalData = rbind(totalData, dataList[[i]])
+}
+
+
+totalData$year = substr(totalData$time,1,4)
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(totalData,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-90,90) 
+mp2<-mp+geom_point(alpha = 0.3,size=totalData$magnitude-4)+ggtitle("global eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+alpha = numeric(22)
+beta = numeric(22)
+
+
+y=levels(factor(relation1$year))
+y=as.numeric(y)
+for (i in y){
+  data = relation1[relation1$year == i,]
+  model = lm(logbigger ~ magn, data = data)
+  alpha[i] = model$coefficients[1]
+  beta[i] = model$coefficients[2]
+}
+alpha=alpha[-which(alpha==0)]
+beta=beta[-which(beta==0)]
+x = c(2000:2003,2005,2006,2008:2011,2013:2021)
+
+
+
+dfa = data.frame(x=x, alpha = alpha)
+a = ggplot(data = dfa, mapping = aes(x = x, y = alpha)) + geom_line(colour = "red") + ggtitle("Alpha")+labs(x="year")
+dfb = data.frame(x=x, beta = beta)
+b = ggplot(data = dfb, mapping = aes(x = x, y = beta)) + geom_line(colour = "blue") + ggtitle("Beta")+labs(x="year")
+```
+```{r,echo=FALSE}
+YDNXY = totalData[totalData$latitude>-11 & totalData$latitude<6 & totalData$longitude>95 & totalData$longitude<141,]
+DZH = totalData[totalData$latitude>32 & totalData$latitude<44 & totalData$longitude>-5 & totalData$longitude<35,]
+RB = totalData[totalData$latitude>20 & totalData$latitude<45 & totalData$longitude>120 & totalData$longitude<155,]
+
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(RB,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(20,45)+xlim(120,155)
+mp2<-mp+geom_point(alpha = 0.3,size=RB$magnitude-4)+ggtitle("Japan region eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+mp2
+```
+
+
+We could draw a plot of Alpha and Beta in Japan. The range of $\alpha$ is $[10.03231, 17.47666]$. The range of $\beta$ is $[-3.198673 -1.230331]$
+
+```{r echo=FALSE}
+ggarrange(a, b, 
+          ncol = 1, nrow = 2)
+```
+
+We can also draw a QQ Plot to examine the normality of the coefficients. It shows that basically the coefficients are normally distributed.
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(alpha,col="blue",pch=16,main = "Alpha Q-Q Plot")
+qqline(alpha,col="red")
+qqnorm(beta,col="blue",pch=16,main = "Beta Q-Q Plot")
+qqline(beta,col="red")
+```
+
+Mediterranean
+----
+```{r,echo=FALSE}
+nameList = list.files("Mediterranean")
+dataList = list()
+len = length(nameList)
+setwd("Mediterranean")
+for (i in 1:len){
+  dataList[[i]] = read.csv(nameList[i])
+}
+
+relation1 = data.frame(magn = numeric(1100), bigger = numeric(1100), year = numeric(1100))
+
+for (j in 1:22){
+  for (i in 1:50){
+    relation1$magn[50 * (j - 1) + i] = 4.8 + 0.1 * i
+    relation1$bigger[50 * (j - 1) + i] = sum(as.numeric(dataList[[j]]$magnitude > relation1$magn[50 * (j - 1) + i]))
+    relation1$year[50 * (j - 1) + i] = j
+  }
+}
+relation1$logbigger = log(relation1$bigger + 1)
+relation1 = relation1[relation1$logbigger > 0, ]
+totalData = dataList[[1]]
+for (i in 2:len){
+  totalData = rbind(totalData, dataList[[i]])
+}
+
+
+totalData$year = substr(totalData$time,1,4)
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(totalData,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-90,90) 
+mp2<-mp+geom_point(alpha = 0.3,size=totalData$magnitude-4)+ggtitle("global eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+alpha = numeric(22)
+beta = numeric(22)
+
+
+y=levels(factor(relation1$year))
+y=as.numeric(y)
+for (i in y){
+  data = relation1[relation1$year == i,]
+  model = lm(logbigger ~ magn, data = data)
+  alpha[i] = model$coefficients[1]
+  beta[i] = model$coefficients[2]
+}
+alpha=alpha[-which(alpha==0)]
+beta=beta[-which(beta==0)]
+x = c(2000:2004,2006:2012,2014:2020)
+
+
+
+dfa = data.frame(x=x, alpha = alpha)
+a = ggplot(data = dfa, mapping = aes(x = x, y = alpha)) + geom_line(colour = "red") + ggtitle("Alpha")+labs(x="year")
+dfb = data.frame(x=x, beta = beta)
+b = ggplot(data = dfb, mapping = aes(x = x, y = beta)) + geom_line(colour = "blue") + ggtitle("Beta")+labs(x="year")
+
+
+```
+```{r,echo=FALSE}
+YDNXY = totalData[totalData$latitude>-11 & totalData$latitude<6 & totalData$longitude>95 & totalData$longitude<141,]
+DZH = totalData[totalData$latitude>32 & totalData$latitude<44 & totalData$longitude>-5 & totalData$longitude<35,]
+RB = totalData[totalData$latitude>20 & totalData$latitude<45 & totalData$longitude>120 & totalData$longitude<155,]
+
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(DZH,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(30,45)+xlim(-10,40)
+mp2<-mp+geom_point(alpha = 0.3,size=DZH$magnitude-4)+ggtitle("Mediterranean region eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+mp2
+```
+
+
+We could draw a plot of Alpha and Beta in Mediterranean.The range of $\alpha$ is $[0.6931472, 16.3971005]$. The range of $\beta$ is $[-2.744918e+00,  1.295904e-15]$
+
+```{r echo=FALSE}
+ggarrange(a, b, 
+          ncol = 1, nrow = 2)
+```
+
+We can also draw a QQ Plot to examine the normality of the coefficients. It shows that basically the coefficients are normally distributed.
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(alpha,col="blue",pch=16,main = "Alpha Q-Q Plot")
+qqline(alpha,col="red")
+qqnorm(beta,col="blue",pch=16,main = "Beta Q-Q Plot")
+qqline(beta,col="red")
+```
+
+35 degrees north latitude
+-----
+```{r,echo=FALSE}
+nameList = list.files("N35")
+dataList = list()
+len = length(nameList)
+setwd("N35")
+for (i in 1:len){
+  dataList[[i]] = read.csv(nameList[i])
+}
+
+relation1 = data.frame(magn = numeric(1100), bigger = numeric(1100), year = numeric(1100))
+
+for (j in 1:22){
+  for (i in 1:50){
+    relation1$magn[50 * (j - 1) + i] = 4.8 + 0.1 * i
+    relation1$bigger[50 * (j - 1) + i] = sum(as.numeric(dataList[[j]]$magnitude > relation1$magn[50 * (j - 1) + i]))
+    relation1$year[50 * (j - 1) + i] = j
+  }
+}
+relation1$logbigger = log(relation1$bigger + 1)
+relation1 = relation1[relation1$logbigger > 0, ]
+totalData = dataList[[1]]
+for (i in 2:len){
+  totalData = rbind(totalData, dataList[[i]])
+}
+
+
+totalData$year = substr(totalData$time,1,4)
+mp<-NULL 
+mapworld<-borders("world",colour = "gray50",fill="white") 
+mp<-ggplot(totalData,aes(x=longitude,y=latitude,color=year))+mapworld+ylim(-90,90) 
+mp2<-mp+geom_point(alpha = 0.3,size=totalData$magnitude-4)+ggtitle("global eartuquake map")+theme(plot.title=element_text(size=30,color="red",face="italic"))+theme_grey(base_size = 8)  
+alpha = numeric(22)
+beta = numeric(22)
+
+
+y=levels(factor(relation1$year))
+y=as.numeric(y)
+for (i in y){
+  data = relation1[relation1$year == i,]
+  model = lm(logbigger ~ magn, data = data)
+  alpha[i] = model$coefficients[1]
+  beta[i] = model$coefficients[2]
+}
+
+x=2000:2021
+
+
+
+dfa = data.frame(x=x, alpha = alpha)
+a = ggplot(data = dfa, mapping = aes(x = x, y = alpha)) + geom_line(colour = "red") + ggtitle("Alpha")+labs(x="year")
+dfb = data.frame(x=x, beta = beta)
+b = ggplot(data = dfb, mapping = aes(x = x, y = beta)) + geom_line(colour = "blue") + ggtitle("Beta")+labs(x="year")
+
+
+```
+
+We could draw a plot of Alpha and Beta in 35 degrees north latitude. The range of $\alpha$ is $[11.81583, 19.85786]$. The range of $\beta$ is $[-3.130260, -1.472439]$
+
+```{r echo=FALSE}
+ggarrange(a, b, 
+          ncol = 1, nrow = 2)
+```
+
+We can also draw a QQ Plot to examine the normality of the coefficients. It shows that basically the coefficients are normally distributed.
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(alpha,col="blue",pch=16,main = "Alpha Q-Q Plot")
+qqline(alpha,col="red")
+qqnorm(beta,col="blue",pch=16,main = "Beta Q-Q Plot")
+qqline(beta,col="red")
+```
+
+When doing this project, we devided the data into 21 files based on the time earthquake occured, so that we can save 95% of the time.
+
+Conclusion
+====
+
+Our conclusion is that the magnitude of an earthquake is linearly related to the frequency after taking the logarithm( where the frequency represents the total number of all earthquakes greater than this magnitude over a period of time). We could find that the coefficients and the trend of coefficients over time of different regions are different. There is no specific trend of the values of coefficient over time and from QQ Plot we can conclude that the coefficients are normally distributed. 
+
+Contribution
+===
+```{r,echo=FALSE}
+a=matrix(data = c("Member","Xingze Wang","Xiao Li","Mingyu Wang","Yulong Zhao","Qizhou Huang","Proposal","1","1","1","1","1","Coding","1","1","1","1","1","Presentation","1","1","1","1","1","Report","1","1","1","1","1"),nrow = 6,ncol = 5,byrow = FALSE)
+print(a)
+```
+
